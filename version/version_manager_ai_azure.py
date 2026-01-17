@@ -3,11 +3,14 @@
 import os
 import json
 from openai import AzureOpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # === Azure OpenAI 設定（環境変数） ===
 # Azure ポータルの「キーとエンドポイント」から取得した値を設定してください
-AZURE_OPENAI_KEY = os.getenv("AZURE_OPENAI_KEY") 
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") # 例: https://xxx.openai.azure.com/
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY") 
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT") 
 DEPLOYMENT_NAME = "gpt-4o" # Azureでデプロイした際の名前
 
 INPUT_JSON = "intermediate_data.json"
@@ -25,7 +28,7 @@ def run_ai_judgment():
     # 2. Azure OpenAI クライアントの初期化
     client = AzureOpenAI(
         azure_endpoint=AZURE_OPENAI_ENDPOINT,
-        api_key=AZURE_OPENAI_KEY,
+        api_key=AZURE_OPENAI_API_KEY,
         api_version="2024-02-15-preview" # または最新のバージョン
     )
 
