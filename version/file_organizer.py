@@ -1,59 +1,37 @@
+# Azure Blob Storage 上でのファイル仕分け処理
+
 import os
 import json
-import shutil
+from azure.storage.blob import BlobServiceClient
 
-# スクリプトがある場所（app/version）を取得
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# 2つ上の階層（プロジェクトルート）を取得
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# App Serviceの環境変数に設定した接続文字列を読み込む
+CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
 
-# パスの設定を修正
-FINAL_JSON = os.path.join(CURRENT_DIR, "final_judgment.json")
-INPUT_DIR = os.path.join(BASE_DIR, "test")
-LATEST_DIR = os.path.join(CURRENT_DIR, "latest_docs")
-ARCHIVE_DIR = os.path.join(CURRENT_DIR, "archive")
+# コンテナ名の設定
+CONTAINER_NEW = "mof2-blob-new"
+CONTAINER_ALL = "mof2-blob-all"
+CONTAINER_OLD = "mof2-blob-old"
 
-def organize_files():
-    print(f"探索中のPDFディレクトリ: {os.path.abspath(INPUT_DIR)}")
-    
-    if not os.path.exists(FINAL_JSON):
-        print(f"エラー: {FINAL_JSON} が見つかりません。先にAI解析を実行してください。")
-        return
-
-    if not os.path.exists(INPUT_DIR):
-        print(f"エラー: PDFが入っている {INPUT_DIR} フォルダが見つかりません。パスを確認してください。")
-        return
-
-    with open(FINAL_JSON, "r", encoding="utf-8") as f:
+def organize_on_blob():
+    # 判定結果(final_judgment.json)を読み込む
+    with open("final_judgment.json", "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    os.makedirs(LATEST_DIR, exist_ok=True)
-    os.makedirs(ARCHIVE_DIR, exist_ok=True)
-
-    results = data.get("results", [])
-    print(f"{len(results)}件の判定データに基づいて処理を開始します...")
-
-    for item in results:
+    for item in data.get("results", []):
         file_name = item.get("internal_id")
         is_latest = item.get("is_latest")
         
-        src_path = os.path.join(INPUT_DIR, file_name)
+        # 移動元のblob（mof2-blob-new）
+        source_blob = blob_service_client.get_blob_client(container=CONTAINER_NEW, blob=file_name)
         
-        if not os.path.exists(src_path):
-            print(f"スキップ: {file_name} が見つかりません（検索先: {src_path}）")
-            continue
+        # 判定に基づいて移動先を決定
+        target_container = CONTAINER_ALL if is_latest else CONTAINER_OLD
+        dest_blob = blob_service_client.get_blob_client(container=target_container, blob=file_name)
 
-        if is_latest:
-            dest_path = os.path.join(LATEST_DIR, file_name)
-            shutil.copy2(src_path, dest_path)
-            print(f"【最新】をコピー: {file_name}")
-        else:
-            dest_path = os.path.join(ARCHIVE_DIR, file_name)
-            # archiveフォルダへ移動
-            shutil.move(src_path, dest_path)
-            print(f"【旧版】をアーカイブへ移動: {file_name}")
+        # リソースB内での「移動」処理（コピーして消す）
+        print(f"移動中: {file_name} -> {target_container}")
+        dest_blob.start_copy_from_url(source_blob.url)
+        source_blob.delete_blob()
 
-    print("\nすべての仕分けが完了しました！")
-
-if __name__ == "__main__":
-    organize_files()
+    print("すべてのBlob仕分けが完了しました！")

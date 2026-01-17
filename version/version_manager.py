@@ -1,90 +1,70 @@
-# pip install easyocr を事前に実行してください
-# pip install pdf2image を事前に実行してください
-
 import os
 import json
 import easyocr
 import numpy as np
 from pdf2image import convert_from_path
+from azure.storage.blob import BlobServiceClient
 
-# PDFが格納されているディレクトリ
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-INPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test")
-
-# AIに渡すための中間データのファイル名
+# === 設定 ===
+CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+SOURCE_CONTAINER = "mof2-blob-new"
+TEMP_DIR = "temp_pdf" # 一時保存用フォルダ
 OUTPUT_JSON = "intermediate_data.json"
 
-def process_pdfs():
-    # OCRエンジンを初期化。日本語('ja')と英語('en')を読み取り対象に設定
+def process_pdfs_from_blob():
+    # 1. 準備
+    if not os.path.exists(TEMP_DIR):
+        os.makedirs(TEMP_DIR)
+    
+    blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(SOURCE_CONTAINER)
     reader = easyocr.Reader(['ja', 'en'])
-    # 解析結果を一時的に溜めておくためのリスト
     extracted_data = []
+
+    # 2. mof2-blob-new コンテナ内のファイル一覧を取得
+    print(f"'{SOURCE_CONTAINER}' 内のファイルをチェック中...")
+    blob_list = container_client.list_blobs()
     
-    # デバッグ用: 処理対象のディレクトリを表示
-    print(f"探索中のディレクトリ: {INPUT_DIR}")
-    
-    # 指定したフォルダが存在しない場合のエラーチェック
-    if not os.path.exists(INPUT_DIR):
-        print(f"エラー: ディレクトリ {INPUT_DIR} が見つかりません。")
-        return
-    
-    # デバック用：フォルダ内の全ファイルをリストアップして表示
-    all_files = os.listdir(INPUT_DIR)
-    print(f"見つかったファイル数: {len(all_files)}")
-    
-    # フォルダ内のファイルを一つずつ取り出して処理
-    for file_name in all_files:
-        # PDFファイル以外（隠しファイルなど）は無視してスキップ
-        if not file_name.lower().endswith('.pdf'):
+    for blob in blob_list:
+        if not blob.name.lower().endswith('.pdf'):
             continue
+            
+        print(f"解析開始: {blob.name}")
+        local_path = os.path.join(TEMP_DIR, blob.name)
         
-        # ファイルのフルパスを作成
-        path = os.path.join(INPUT_DIR, file_name)
-        print(f"PDF解析中: {file_name}")
-        
-        
-        
-        #===== OCR処理 =====#
+        # 3. リソースBから一時的にダウンロード
+        blob_client = container_client.get_blob_client(blob.name)
+        with open(local_path, "wb") as file:
+            file.write(blob_client.download_blob().readall())
+
+        # 4. OCR処理 (以前のロジックと同じ)
         try:
-            # 判定に必要な冒頭（第1条等）と末尾（署名日等）を重点的に取得
-            images = convert_from_path(path)
-            # 最初と最後のページのみを結合（タイトルや第1条があるため）
+            images = convert_from_path(local_path)
             target_pages = [images[0]]
-            # 2ページ以上ある場合は、最後（署名欄があるページ）も対象に追加
             if len(images) > 1:
                 target_pages.append(images[-1])
             
             combined_text = ""
             for img in target_pages:
-                # OCR実行
                 img_array = np.array(img)
-                # 読み取った単語をスペースで繋いで一つの文章にまとめる
                 result = reader.readtext(img_array, detail=0)
                 combined_text += " ".join(result) + " "
 
-            #===== データの格納 =====#
-            # AIが「中身」で判断できるように、抽出したテキストを保存
             extracted_data.append({
-                # ファイル名はAIには教えず、後でどのファイルか特定するためのIDとして保持
-                "internal_id": file_name,
-                # 冒頭と末尾の主要情報をカバーする2000文字をAIに渡すデータにして格納
+                "internal_id": blob.name,
                 "text_content": combined_text[:2000] 
             })
             
+            # 5. 使い終わった一時ファイルを削除
+            os.remove(local_path)
+            
         except Exception as e:
-            # OCRやPDF変換でエラーが起きても止まらないように、エラー内容を表示して次へ進みます
-            print(f"ファイル {file_name} の処理中にエラーが発生しました: {e}")
+            print(f"エラー ({blob.name}): {e}")
 
-    # 抽出したデータをJSONファイルに保存
+    # 6. 中間データを保存
     with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        # 日本語が化けないようにし、見やすいように字下げ（indent=4）を付けて保存
         json.dump(extracted_data, f, ensure_ascii=False, indent=4)
-    print(f"完了: {OUTPUT_JSON} を作成しました。({len(extracted_data)}件のデータを格納)")
+    print(f"完了: {OUTPUT_JSON} を作成しました。({len(extracted_data)}件)")
 
 if __name__ == "__main__":
-    process_pdfs()
-    
-#作成したJSONファイルの内容を確認
-print("\n=== 抽出された中間データ ===")
-with open(OUTPUT_JSON, "r", encoding="utf-8") as f:
-    print(f.read())
+    process_pdfs_from_blob()
