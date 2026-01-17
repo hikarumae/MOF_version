@@ -1,7 +1,7 @@
 # main.py
 import version_manager
 import version_manager_ai_azure
-import file_organizer
+import file_organizer_blob
 import time
 
 def run_pipeline():
@@ -17,9 +17,10 @@ def run_pipeline():
     time.sleep(2)
     
     print("\n=== [3/3] ファイルの仕分け（最新・アーカイブ）を開始します ===")
-    file_organizer.organize_files()
+    file_organizer_blob.organize_files()
     
     print("\n🎉 すべての工程が正常に完了しました！")
+    
 
 if __name__ == "__main__":
     run_pipeline()

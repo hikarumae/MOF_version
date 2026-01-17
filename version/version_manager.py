@@ -3,7 +3,10 @@ import json
 import easyocr
 import numpy as np
 from pdf2image import convert_from_path
+from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient
+
+load_dotenv()
 
 # === 設定 ===
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
