@@ -5,6 +5,8 @@ import numpy as np
 from pdf2image import convert_from_path
 from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient
+import unicodedata
+
 
 load_dotenv()
 
@@ -29,14 +31,19 @@ def process_pdfs_from_blob():
     blob_list = container_client.list_blobs()
     
     for blob in blob_list:
-        if not blob.name.lower().endswith('.pdf'):
+        # Blobから取得した名前をNFCに正規化
+        file_name = unicodedata.normalize('NFC', blob.name)
+        
+        if not file_name.lower().endswith('.pdf'):
             continue
             
-        print(f"解析開始: {blob.name}")
-        local_path = os.path.join(TEMP_DIR, blob.name)
+        print(f"解析開始: {file_name}")
+        # local_path も正規化後の名前で作成
+        local_path = os.path.join(TEMP_DIR, file_name) 
         
         # 3. リソースBから一時的にダウンロード
-        blob_client = container_client.get_blob_client(blob.name)
+        # ※Azure上のファイルを探す時は、元の blob.name を使う必要がある
+        blob_client = container_client.get_blob_client(blob.name) 
         with open(local_path, "wb") as file:
             file.write(blob_client.download_blob().readall())
 
@@ -52,9 +59,11 @@ def process_pdfs_from_blob():
                 img_array = np.array(img)
                 result = reader.readtext(img_array, detail=0)
                 combined_text += " ".join(result) + " "
-
+            
+            # 抽出したデータの格納
             extracted_data.append({
-                "internal_id": blob.name,
+                # ここを正規化後の file_name にすることで、Step 3 の仕分けプログラムと一致させます
+                "internal_id": file_name, 
                 "text_content": combined_text[:2000] 
             })
             

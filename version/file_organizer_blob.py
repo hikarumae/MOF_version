@@ -4,6 +4,7 @@ import os
 import json
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
+import unicodedata
 
 # .envファイルから接続情報を読み込む
 load_dotenv()
@@ -31,28 +32,52 @@ def organize_blobs():
     print(f"{len(results)}件の判定データに基づいてBlobの仕分けを開始します...")
 
     for item in results:
-        file_name = item.get("internal_id")
+        # AI判定時のID（正規化されている可能性がある名前）
+        original_id = item.get("internal_id")
         is_latest = item.get("is_latest")
         
-        # 移動元のBlobクライアント
-        source_blob = blob_service_client.get_blob_client(container=CONTAINER_NEW, blob=file_name)
+        # まずはそのままの名前でクライアントを作成
+        source_blob = blob_service_client.get_blob_client(container=CONTAINER_NEW, blob=original_id)
         
-        # 判定に基づいて移動先のコンテナを決定
+        # もし見つからない場合は、正規化を解除した形式（NFD）なども試すロジック
+        if not source_blob.exists():
+            # Mac特有の形式(NFD)に変換して再試行
+            nfd_name = unicodedata.normalize('NFD', original_id)
+            source_blob = blob_service_client.get_blob_client(container=CONTAINER_NEW, blob=nfd_name)
+            
+            if not source_blob.exists():
+                print(f"⚠️ スキップ: {original_id} が {CONTAINER_NEW} にどうしても見当たりません。")
+                continue
+            
+            # 見つかった場合は、以降この nfd_name を使う
+            active_file_name = nfd_name
+        else:
+            active_file_name = original_id
+
+        # 移動先の決定（名前は元のIDを使用）
         target_container = CONTAINER_ALL if is_latest else CONTAINER_OLD
-        dest_blob = blob_service_client.get_blob_client(container=target_container, blob=file_name)
+        dest_blob = blob_service_client.get_blob_client(container=target_container, blob=active_file_name)
 
         try:
-            # 3. ファイルのコピーを実行
-            # start_copy_from_url を使うと、Azureのネットワーク内で高速にコピーされます
-            print(f"移動中: {file_name} -> {target_container}")
+            print(f"移動中: {active_file_name} -> {target_container}")
+            # コピー実行
             dest_blob.start_copy_from_url(source_blob.url)
             
-            # 4. コピーが完了したら元データを削除（これで「移動」が完了）
-            source_blob.delete_blob()
-            
-        except Exception as e:
-            print(f"エラー ({file_name}): {e}")
+            # コピー完了待ち
+            props = dest_blob.get_blob_properties()
+            while props.copy.status == 'pending':
+                time.sleep(1)
+                props = dest_blob.get_blob_properties()
 
+            if props.copy.status == 'success':
+                source_blob.delete_blob()
+                print(f"✅ 完了: {active_file_name}")
+            else:
+                print(f"❌ コピー失敗: {props.copy.status}")
+                
+        except Exception as e:
+            print(f"エラー ({active_file_name}): {e}")
+            
     print("\nすべてのBlob仕分けが完了しました！")
 
 if __name__ == "__main__":
