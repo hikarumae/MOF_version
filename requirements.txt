@@ -1,5 +1,7 @@
 #Azure上の App Service は、デプロイ時に requirements.txt というファイルを見て、必要な道具（easyocrやopenaiなど）を自動でインストールしてくれます。
 #ですので、このファイルに必要な道具を列挙しておきます
+
+# --- 外部ライブラリ (Azure App Service用) ---
 easyocr
 pdf2image
 openai
@@ -7,10 +9,10 @@ python-dotenv
 numpy
 azure-storage-blob
 azure-search-documents
-unicodedata
-time
+pytesseract
+python-dateutil
 
-
+# --- 依存関係・その他 ---
 altgraph==0.17.2
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -31,26 +33,18 @@ httpx==0.28.1
 idna==3.11
 jiter==0.12.0
 macholib==1.15.2
-numpy==2.0.2
-openai==2.15.0
 packaging==25.0
-pdf2image==1.17.0
 pillow==11.3.0
-pip==21.2.4
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
 pydantic==2.12.5
 pydantic_core==2.41.5
 pypdf==6.6.0
-pytesseract==0.3.13
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.1
 pytz==2025.2
 regex==2025.11.3
 reportlab==4.4.7
 requests==2.32.5
 rsa==4.9.1
-setuptools==58.0.4
 six==1.15.0
 sniffio==1.3.1
 starlette==0.49.3
@@ -62,4 +56,3 @@ tzlocal==5.3.1
 urllib3==2.6.3
 uvicorn==0.39.0
 websockets==15.0.1
-wheel==0.37.0
