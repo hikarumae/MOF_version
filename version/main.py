@@ -1,6 +1,6 @@
-import version_manager
-import version_manager_ai_azure
-import file_organizer_blob
+import search_fetcher           # Step 1: Azure AI Searchからデータ取得
+import version_manager_ai_azure # Step 2: Azure OpenAIによる判定
+import file_organizer_blob      # Step 3: Blob間でのファイル移動
 import time
 import os
 from dotenv import load_dotenv
@@ -9,36 +9,44 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def run_full_pipeline():
-    print("🚀 --- 文書管理AI自動パイプラインを開始します ---")
+    print("🚀 --- 文書管理AI自動パイプライン (AI Search版) 開始 ---")
     start_time = time.time()
 
-    # 1. OCR処理 (mof2-blob-new から取得)
-    print("\n[Step 1/3] OCR処理を開始...")
+    # --- [Step 1] Azure AI Search から解析済みテキストを取得 ---
+    # 自前でOCRを行わず、Azure側ですでにOCR済みのデータを取得します。
+    print("\n[Step 1/3] AI SearchからOCR済みテキストを取得中...")
     try:
-        version_manager.process_pdfs_from_blob()
+        search_fetcher.fetch_data_from_ai_search()
     except Exception as e:
-        print(f"❌ Step 1 でエラーが発生しました: {e}")
+        print(f"❌ Step 1 (データ取得) でエラーが発生しました: {e}")
         return
 
-    # 2. Azure OpenAI による判定
+    # --- [Step 2] Azure OpenAI による最新版・カテゴリ判定 ---
+    # 取得した「前後2000文字」をAIに渡し、仕分けルールを決定します。
     print("\n[Step 2/3] Azure OpenAI による最新版判定を開始...")
     try:
         version_manager_ai_azure.run_ai_judgment()
     except Exception as e:
-        print(f"❌ Step 2 でエラーが発生しました: {e}")
+        print(f"❌ Step 2 (AI判定) でエラーが発生しました: {e}")
         return
 
-    # 3. Blob間でのファイル仕分け
+    # --- [Step 3] Blobコンテナ間でのファイル仕分け移動 ---
+    # AIの判定結果に基づき、適切なコンテナのフォルダへファイルを移動します。
     print("\n[Step 3/3] Blobコンテナ間でのファイル移動を開始...")
     try:
         file_organizer_blob.organize_blobs()
     except Exception as e:
-        print(f"❌ Step 3 でエラーが発生しました: {e}")
+        print(f"❌ Step 3 (ファイル移動) でエラーが発生しました: {e}")
         return
 
+    # --- 終了処理 ---
     end_time = time.time()
     elapsed = end_time - start_time
-    print(f"\n✨ 全行程が完了しました！ (合計時間: {elapsed:.2f}秒)")
+    print("-" * 50)
+    print(f"✨ 全行程が正常に完了しました！")
+    print(f"⏱️ 合計処理時間: {elapsed:.2f}秒")
+    print("-" * 50)
 
 if __name__ == "__main__":
+    # 実行前に必要なディレクトリ等があればここでチェックする記述を追加しても良いです
     run_full_pipeline()
