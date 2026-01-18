@@ -16,17 +16,15 @@ BATCH_SIZE = 5
 
 def normalize_doc_type(doc_type):
     """
-    表記ゆれを防ぐための正規化ロジック
-    「売買契約書」と「契約書」が別グループになると比較できないため、
-    比較用キーとしては「契約書」に統一する。
+    表記ゆれを強力に統一するロジック。
+    ユーザー要件:「売買契約書」「覚書」「○○契約」などはすべて「契約書」に統一する。
     """
     if not doc_type: return "不明"
     
-    # "契約書" という文字が含まれていれば、すべて "契約書" グループとして扱う
-    if "契約書" in doc_type:
+    # 文字列の中に「契約」または「覚書」が含まれていれば、すべて「契約書」に統一
+    if "契約" in doc_type or "覚書" in doc_type:
         return "契約書"
-    
-    # その他の文書はそのまま（例：請求書、就業規則など）
+        
     return doc_type
 
 def run_ai_judgment():
@@ -56,7 +54,6 @@ def run_ai_judgment():
         batch_num = (i // BATCH_SIZE) + 1
         print(f"   Running Batch {batch_num} ({len(batch)} items)...")
 
-        # IDマッピング
         id_map = {}
         masked_batch = []
         for j, item in enumerate(batch):
@@ -78,7 +75,7 @@ def run_ai_judgment():
         3. ファイル名などの外部情報は一切与えられていません。
 
         【思考ステップ】
-        1. **名寄せ**: 各文書の契約相手を特定（例：「Japan Logistics」と「ジャパン・ロジスティクス」は同一）。「たも株式会社」系列は自社なので相手方には含めない。
+        1. **名寄せ**: 各文書の契約相手や規定名を特定（例：「Japan Logistics」と「ジャパン・ロジスティクス」は同一）。「たも株式会社」系列は自社なので相手方には含めない。
         2. **種別判定**: 文書が「契約書」「就業規則」「職務権限基準」等のどれに当たるか判定。
         3. **グループ化**: 【相手先(または規定名) + 文書種別】でグループを作る。
         4. **日付の標準化**: 抽出した日付（締結日、施行日、改訂日等）を YYYY-MM-DD 形式に変換。和暦（令和等）は必ず西暦に変換すること。
@@ -90,7 +87,7 @@ def run_ai_judgment():
             "results": [
                 {{
                     "id": "入力されたID",
-                    "document_type": "文書種別(例: 売買契約書)",
+                    "document_type": "文書種別",
                     "target_entity": "相手先会社名 または 規定名",
                     "identified_date": "YYYY-MM-DD",
                     "is_latest": true/false
@@ -117,40 +114,39 @@ def run_ai_judgment():
                 res_content = response.choices[0].message.content
                 batch_results = json.loads(res_content).get("results", [])
 
-                # 件数チェック
                 if len(batch_results) < len(batch):
                     print(f"      ⚠️ 件数不足 (期待:{len(batch)}, 実際:{len(batch_results)}) - リトライします")
                     time.sleep(1)
                     continue
                 
-                # 成功したらID復元して追加
                 for res in batch_results:
                     res["internal_id"] = id_map.get(res.get("id"))
                     all_ai_results.append(res)
-                break # 成功したらリトライループを抜ける
-
+                break
             except Exception as e:
                 print(f"      ❌ エラー ({attempt+1}/{max_retries}): {e}")
                 time.sleep(2)
-        else:
-            print(f"   ❌ Batch {batch_num} は完全に失敗しました。スキップします。")
 
-
-    # --- Pythonによる最終集計と正規化（ここが改善点） ---
+    # --- Pythonによる最終集計と正規化 ---
     print(f"📊 集計と最終判定を開始します ({len(all_ai_results)}/{len(doc_data)}件)...")
 
     groups = {}
     for res in all_ai_results:
         if not res.get("internal_id"): continue
 
-        # 1. 文書種別の正規化（「売買契約書」->「契約書」へ統合）
+        # 1. 文書種別の強力な正規化
+        # ここで「売買契約書」などを強制的に「契約書」へ書き換えます
         raw_type = res.get("document_type") or "不明"
         norm_type = normalize_doc_type(raw_type)
+        
+        # 【重要】結果データをここで上書き更新する
+        # これにより、以降の処理やJSON出力はすべて「契約書」になります
+        res["document_type"] = norm_type
         
         entity = res.get("target_entity") or "不明"
         
         # 2. グループ化キー: 正規化された種別_相手先
-        # これにより、「東京メディカル」の「売買契約書」と「契約書」は同じグループになります
+        # これにより、表記が異なっていた文書も同じグループに統合されます
         key = f"{norm_type}_{entity}"
         
         if key not in groups:
@@ -163,20 +159,15 @@ def run_ai_judgment():
         docs.sort(key=lambda x: x.get("identified_date") or "1900-01-01", reverse=True)
         
         for idx, doc in enumerate(docs):
-            # 先頭のみTrue
             doc["is_latest"] = (idx == 0)
-            
             # フォルダ分け用に、グループ名（相手先）をセット
             doc["group_name"] = doc.get("target_entity")
-            
-            # 念のため正規化前の種別を保持しておく（ファイル移動の際のフォルダ名に使用するため）
-            # もしフォルダ名も「契約書」に統一したい場合は norm_type を使ってください
             final_results.append(doc)
 
     with open(FINAL_JSON, "w", encoding="utf-8") as f:
         json.dump({"results": final_results}, f, ensure_ascii=False, indent=4)
         
-    print(f"✅ 判定完了: {FINAL_JSON} を作成しました。")
+    print(f"✅ 判定完了: {FINAL_JSON} を作成しました（種別は統一済み）。")
 
 if __name__ == "__main__":
     run_ai_judgment()

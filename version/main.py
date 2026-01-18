@@ -16,7 +16,7 @@ def run_full_pipeline():
     # 自前でOCRを行わず、Azure側ですでにOCR済みのデータを取得します。
     print("\n[Step 1/3] AI SearchからOCR済みテキストを取得中...")
     try:
-        search_fetcher.fetch_data_from_ai_search()
+        search_fetcher.fetch_all_documents()
     except Exception as e:
         print(f"❌ Step 1 (データ取得) でエラーが発生しました: {e}")
         return
