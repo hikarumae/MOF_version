@@ -64,7 +64,8 @@ def process_pdfs_from_blob():
             extracted_data.append({
                 # ここを正規化後の file_name にすることで、Step 3 の仕分けプログラムと一致させます
                 "internal_id": file_name, 
-                "text_content": combined_text[:2000] 
+                "text_head": combined_text[:1000],  # 最初の1000文字
+                "text_tail": combined_text[-1000:] # 最後の1000文字 
             })
             
             # 5. 使い終わった一時ファイルを削除

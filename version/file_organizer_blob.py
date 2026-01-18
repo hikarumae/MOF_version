@@ -5,6 +5,7 @@ import json
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 import unicodedata
+import time
 
 # .envファイルから接続情報を読み込む
 load_dotenv()
@@ -27,6 +28,11 @@ def organize_blobs():
 
     # 2. Blobサービスへの接続準備
     blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
+    container_client = blob_service_client.get_container_client(CONTAINER_NEW)
+    
+    # 現在コンテナにあるファイル名をすべて取得しておく
+    existing_blobs = [b.name for b in container_client.list_blobs()]
+    
     results = data.get("results", [])
     
     print(f"{len(results)}件の判定データに基づいてBlobの仕分けを開始します...")
