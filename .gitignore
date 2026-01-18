@@ -12,3 +12,6 @@ final_judgment.json
 
 # 環境変数・機密情報 (セキュリティのため)
 .env
+
+# localフォルダ (一時ファイル保存用)
+version_local/
