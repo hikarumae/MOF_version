@@ -1,28 +1,30 @@
-import version_manager          # Step 1: 自前OCR (EasyOCR) でデータ取得
+# Azure AI Search用　
+
+import search_fetcher           # Step 1: Azure AI Searchからデータ取得
 import version_manager_ai_azure # Step 2: Azure OpenAIによる判定
 import file_organizer_blob      # Step 3: Blob間でのファイル移動
 import time
 import os
 from dotenv import load_dotenv
 
-# .envの読み込み
+# .envの読み込み（ローカル実行用）
 load_dotenv()
 
 def run_full_pipeline():
-    print("🚀 --- 文書管理AI自動パイプライン (自前OCR版) 開始 ---")
+    print("🚀 --- 文書管理AI自動パイプライン (AI Search版) 開始 ---")
     start_time = time.time()
 
-    # --- [Step 1] PDFダウンロード & ローカルOCR ---
-    # Azure AI Searchを使わず、Pythonスクリプトで直接OCRします。
-    print("\n[Step 1/3] BlobからPDFを取得し、OCR処理を実行中...")
+    # --- [Step 1] Azure AI Search から解析済みテキストを取得 ---
+    # 自前でOCRを行わず、Azure側ですでにOCR済みのデータを取得します。
+    print("\n[Step 1/3] AI SearchからOCR済みテキストを取得中...")
     try:
-        # ここを search_fetcher から version_manager に戻しました
-        version_manager.process_pdfs_from_blob()
+        search_fetcher.fetch_all_documents()
     except Exception as e:
-        print(f"❌ Step 1 (OCR処理) でエラーが発生しました: {e}")
+        print(f"❌ Step 1 (データ取得) でエラーが発生しました: {e}")
         return
 
     # --- [Step 2] Azure OpenAI による最新版・カテゴリ判定 ---
+    # 取得した「前後2000文字」をAIに渡し、仕分けルールを決定します。
     print("\n[Step 2/3] Azure OpenAI による最新版判定を開始...")
     try:
         version_manager_ai_azure.run_ai_judgment()
@@ -31,6 +33,7 @@ def run_full_pipeline():
         return
 
     # --- [Step 3] Blobコンテナ間でのファイル仕分け移動 ---
+    # AIの判定結果に基づき、適切なコンテナのフォルダへファイルを移動します。
     print("\n[Step 3/3] Blobコンテナ間でのファイル移動を開始...")
     try:
         file_organizer_blob.organize_blobs()
@@ -47,4 +50,5 @@ def run_full_pipeline():
     print("-" * 50)
 
 if __name__ == "__main__":
+    # 実行前に必要なディレクトリ等があればここでチェックする記述を追加しても良いです
     run_full_pipeline()

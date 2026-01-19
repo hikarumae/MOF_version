@@ -1,83 +1,50 @@
+import version_manager          # Step 1: 自前OCR (EasyOCR) でデータ取得
+import version_manager_ai_azure # Step 2: Azure OpenAIによる判定
+import file_organizer_blob      # Step 3: Blob間でのファイル移動
+import time
 import os
-import json
-import easyocr
-import numpy as np
-from pdf2image import convert_from_path
 from dotenv import load_dotenv
-from azure.storage.blob import BlobServiceClient
-import unicodedata
 
-
+# .envの読み込み
 load_dotenv()
 
-# === 設定 ===
-CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-SOURCE_CONTAINER = "mof2-blob-new"
-TEMP_DIR = "temp_pdf" # 一時保存用フォルダ
-OUTPUT_JSON = "intermediate_data.json"
+def run_full_pipeline():
+    print("🚀 --- 文書管理AI自動パイプライン (自前OCR版) 開始 ---")
+    start_time = time.time()
 
-def process_pdfs_from_blob():
-    # 1. 準備
-    if not os.path.exists(TEMP_DIR):
-        os.makedirs(TEMP_DIR)
-    
-    blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
-    container_client = blob_service_client.get_container_client(SOURCE_CONTAINER)
-    reader = easyocr.Reader(['ja', 'en'])
-    extracted_data = []
+    # --- [Step 1] PDFダウンロード & ローカルOCR ---
+    # Azure AI Searchを使わず、Pythonスクリプトで直接OCRします。
+    print("\n[Step 1/3] BlobからPDFを取得し、OCR処理を実行中...")
+    try:
+        # ここを search_fetcher から version_manager に戻しました
+        version_manager.process_pdfs_from_blob()
+    except Exception as e:
+        print(f"❌ Step 1 (OCR処理) でエラーが発生しました: {e}")
+        return
 
-    # 2. mof2-blob-new コンテナ内のファイル一覧を取得
-    print(f"'{SOURCE_CONTAINER}' 内のファイルをチェック中...")
-    blob_list = container_client.list_blobs()
-    
-    for blob in blob_list:
-        # Blobから取得した名前をNFCに正規化
-        file_name = unicodedata.normalize('NFC', blob.name)
-        
-        if not file_name.lower().endswith('.pdf'):
-            continue
-            
-        print(f"解析開始: {file_name}")
-        # local_path も正規化後の名前で作成
-        local_path = os.path.join(TEMP_DIR, file_name) 
-        
-        # 3. リソースBから一時的にダウンロード
-        # ※Azure上のファイルを探す時は、元の blob.name を使う必要がある
-        blob_client = container_client.get_blob_client(blob.name) 
-        with open(local_path, "wb") as file:
-            file.write(blob_client.download_blob().readall())
+    # --- [Step 2] Azure OpenAI による最新版・カテゴリ判定 ---
+    print("\n[Step 2/3] Azure OpenAI による最新版判定を開始...")
+    try:
+        version_manager_ai_azure.run_ai_judgment()
+    except Exception as e:
+        print(f"❌ Step 2 (AI判定) でエラーが発生しました: {e}")
+        return
 
-        # 4. OCR処理 (以前のロジックと同じ)
-        try:
-            images = convert_from_path(local_path)
-            target_pages = [images[0]]
-            if len(images) > 1:
-                target_pages.append(images[-1])
-            
-            combined_text = ""
-            for img in target_pages:
-                img_array = np.array(img)
-                result = reader.readtext(img_array, detail=0)
-                combined_text += " ".join(result) + " "
-            
-            # 抽出したデータの格納
-            extracted_data.append({
-                # ここを正規化後の file_name にすることで、Step 3 の仕分けプログラムと一致させます
-                "internal_id": file_name, 
-                "text_head": combined_text[:1000],  # 最初の1000文字
-                "text_tail": combined_text[-1000:] # 最後の1000文字 
-            })
-            
-            # 5. 使い終わった一時ファイルを削除
-            os.remove(local_path)
-            
-        except Exception as e:
-            print(f"エラー ({blob.name}): {e}")
+    # --- [Step 3] Blobコンテナ間でのファイル仕分け移動 ---
+    print("\n[Step 3/3] Blobコンテナ間でのファイル移動を開始...")
+    try:
+        file_organizer_blob.organize_blobs()
+    except Exception as e:
+        print(f"❌ Step 3 (ファイル移動) でエラーが発生しました: {e}")
+        return
 
-    # 6. 中間データを保存
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(extracted_data, f, ensure_ascii=False, indent=4)
-    print(f"完了: {OUTPUT_JSON} を作成しました。({len(extracted_data)}件)")
+    # --- 終了処理 ---
+    end_time = time.time()
+    elapsed = end_time - start_time
+    print("-" * 50)
+    print(f"✨ 全行程が正常に完了しました！")
+    print(f"⏱️ 合計処理時間: {elapsed:.2f}秒")
+    print("-" * 50)
 
 if __name__ == "__main__":
-    process_pdfs_from_blob()
+    run_full_pipeline()
