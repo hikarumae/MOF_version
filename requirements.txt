@@ -11,6 +11,7 @@ azure-storage-blob
 azure-search-documents
 pytesseract
 python-dateutil
+pdfminer.six
 
 # --- 依存関係・その他 ---
 altgraph==0.17.2
