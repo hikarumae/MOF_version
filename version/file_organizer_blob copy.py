@@ -1,3 +1,6 @@
+# Azure　Blobでカテゴリ別にコンテナを作成する
+#　コンテナは「mof2-blob-all」と「mof2-blob-old」で管理する為、このファイルは使わない。
+
 import os
 import json
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
@@ -12,10 +15,19 @@ load_dotenv()
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 SOURCE_CONTAINER = "mof2-blob-new"
 FINAL_JSON = "final_judgment.json"
+ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME") # .envに追加推奨、なければ接続文字列から解析も可
+ACCOUNT_KEY = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")   # .envに追加推奨
 
-# 【変更点】移動先コンテナの定義を変更
-DEST_CONTAINER_LATEST = "mof2-blob-all" # 最新版の移動先
-DEST_CONTAINER_OLD = "mof2-blob-old"    # 古いファイルの移動先
+# コンテナ設定
+CONTAINER_MAP = {
+    "売買契約書": "container-contracts",
+    "契約書": "container-contracts",
+    "社内規定": "container-rules",
+    "就業規則": "container-rules",
+    "職務権限基準": "container-rules",
+    "請求書": "container-invoices",
+    "その他": "container-others"
+}
 
 def get_service_client():
     return BlobServiceClient.from_connection_string(CONNECTION_STRING)
@@ -40,9 +52,10 @@ def organize_blobs():
 
     blob_service_client = get_service_client()
 
-    # --- 【変更点】移動先コンテナ（allとold）を事前に作成 ---
-    target_containers = [DEST_CONTAINER_LATEST, DEST_CONTAINER_OLD]
-    for c_name in target_containers:
+    # --- 移動先コンテナを事前に全て作っておく ---
+    unique_containers = set(CONTAINER_MAP.values())
+    unique_containers.add("container-others")
+    for c_name in unique_containers:
         ensure_container_exists(blob_service_client, c_name)
 
     print(f"📂 {len(results)} 件のファイル移動を開始します...")
@@ -55,18 +68,11 @@ def organize_blobs():
         is_latest = item.get("is_latest", False)
         category = item.get("document_type", "未分類")
         group = item.get("group_name", "共通").replace("/", "／")
+        version_status = "new" if is_latest else "old"
 
-        # --- 【変更点】移動先コンテナとパスの決定ロジック ---
-        if is_latest:
-            # 最新版は 'mof2-blob-all' へ
-            target_container = DEST_CONTAINER_LATEST
-        else:
-            # 旧版は 'mof2-blob-old' へ
-            target_container = DEST_CONTAINER_OLD
-        
-        # パス構成: カテゴリ/グループ/ファイル名
-        # (コンテナで新旧が分かれるため、パスに version_status は含めない)
-        new_blob_path = f"{category}/{group}/{original_id}"
+        # 移動先決定
+        target_container = CONTAINER_MAP.get(category, CONTAINER_MAP["その他"])
+        new_blob_path = f"{category}/{group}/{version_status}/{original_id}"
 
         # クライアント取得
         source_blob = blob_service_client.get_blob_client(SOURCE_CONTAINER, original_id)
@@ -82,18 +88,19 @@ def organize_blobs():
         dest_blob = blob_service_client.get_blob_client(target_container, new_blob_path)
 
         try:
-            # SASトークン生成（コピー権限用）
+            # --- 【重要】SASトークン（一時的なアクセス権）付きURLを生成 ---
+            # これがないと、Azure内コピーでも「権限不足」で失敗することが多いです
             sas_token = generate_blob_sas(
                 account_name=source_blob.account_name,
                 container_name=SOURCE_CONTAINER,
                 blob_name=source_blob.blob_name,
                 account_key=blob_service_client.credential.account_key,
                 permission=BlobSasPermissions(read=True),
-                expiry=datetime.now(timezone.utc) + timedelta(minutes=10)
+                expiry=datetime.now(timezone.utc) + timedelta(minutes=10) # 10分間だけ有効
             )
             source_url_with_sas = f"{source_blob.url}?{sas_token}"
 
-            print(f"🚀 移動中 ({'最新' if is_latest else '旧版'}): {original_id}")
+            print(f"🚀 移動中: {original_id}")
             print(f"   -> {target_container}/{new_blob_path}")
 
             # コピー開始
