@@ -14,5 +14,5 @@ COPY . .
 # ライブラリのインストール
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ひとまず起動し続けるための設定（Webサーバーとして動かす場合はここを書き換え）
-CMD ["python", "version_manager.py"]
+# 全体を統括する main.py を実行するようにします
+CMD ["python", "main.py"]

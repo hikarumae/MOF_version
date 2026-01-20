@@ -1,6 +1,3 @@
-# 
-#
-
 import os
 import json
 import time
@@ -23,8 +20,11 @@ TEMP_DIR = "temp_pdfs"
 def download_blobs():
     """BlobストレージからPDFファイルを一時フォルダにダウンロードする"""
     if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
-    os.makedirs(TEMP_DIR)
+        try:
+            shutil.rmtree(TEMP_DIR)
+        except Exception:
+            pass # 事前掃除で失敗しても気にせず進む
+    os.makedirs(TEMP_DIR, exist_ok=True)
 
     blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
     container_client = blob_service_client.get_container_client(SOURCE_CONTAINER)
@@ -64,19 +64,15 @@ def extract_text_hybrid(file_path, reader):
             full_text = raw_text
             method_used = "TextLayer (pdfminer)"
     except Exception as e:
-        print(f"      [Info] テキスト抽出スキップ: {e}")
+        # pdfminerが失敗してもエラーログは出さずに静かに次へ
+        pass
 
     # --- Step 2: 失敗時のみ OCR 実行 (EasyOCR) ---
     if not full_text:
         method_used = "OCR (EasyOCR)"
         try:
-            # 全ページやると遅すぎるため、最初と最後のページのみ対象にする等の工夫も可能
-            # ここでは精度重視で全ページ処理するが、必要に応じて調整してください
             images = convert_from_path(file_path)
-            
             ocr_text_parts = []
-            # 処理時間の短縮：最大5ページまでとする場合
-            # target_images = images[:5] 
             target_images = images 
 
             for img in target_images:
@@ -101,9 +97,8 @@ def process_pdfs_from_blob():
         print("⚠️ 処理対象のPDFが見つかりませんでした。")
         return
 
-    # 2. EasyOCRの初期化 (GPUがあれば自動で使用)
+    # 2. EasyOCRの初期化
     print("⚙️ OCRエンジン (EasyOCR) を初期化中...")
-    # 対応言語: 日本語(ja)と英語(en)
     reader = easyocr.Reader(['ja', 'en']) 
 
     extracted_data = []
@@ -119,7 +114,6 @@ def process_pdfs_from_blob():
         
         print(f" 完了 ({elapsed:.2f}s) via {method}")
 
-        # 前後2000文字を抽出（AIへ渡す用）
         text_head = text[:2000] if text else ""
         text_tail = text[-2000:] if text else ""
 
@@ -135,10 +129,15 @@ def process_pdfs_from_blob():
 
     print(f"✅ 解析完了: {OUTPUT_JSON} を作成しました。")
     
-    # 4. 一時ファイル削除
+    # 4. 一時ファイル削除 (Mac/Win両対応・安全版)
     if os.path.exists(TEMP_DIR):
-        shutil.rmtree(TEMP_DIR)
-        print("🗑️ 一時ファイルを削除しました。")
+        try:
+            time.sleep(1) # ロック解放待ち
+            shutil.rmtree(TEMP_DIR)
+            print("🗑️ 一時ファイルを削除しました。")
+        except Exception as e:
+            # 削除に失敗してもメイン処理には影響ないので続行
+            print(f"⚠️ 一時フォルダの削除に失敗しましたが、処理を続行します: {e}")
 
 if __name__ == "__main__":
     process_pdfs_from_blob()

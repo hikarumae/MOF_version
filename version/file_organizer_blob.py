@@ -13,7 +13,6 @@ CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 SOURCE_CONTAINER = "mof2-blob-new"
 FINAL_JSON = "final_judgment.json"
 
-# 【変更点】移動先コンテナの定義を変更
 DEST_CONTAINER_LATEST = "mof2-blob-all" # 最新版の移動先
 DEST_CONTAINER_OLD = "mof2-blob-old"    # 古いファイルの移動先
 
@@ -40,7 +39,7 @@ def organize_blobs():
 
     blob_service_client = get_service_client()
 
-    # --- 【変更点】移動先コンテナ（allとold）を事前に作成 ---
+    # 移動先コンテナ作成
     target_containers = [DEST_CONTAINER_LATEST, DEST_CONTAINER_OLD]
     for c_name in target_containers:
         ensure_container_exists(blob_service_client, c_name)
@@ -56,17 +55,17 @@ def organize_blobs():
         category = item.get("document_type", "未分類")
         group = item.get("group_name", "共通").replace("/", "／")
 
-        # --- 【変更点】移動先コンテナとパスの決定ロジック ---
+        # --- 【変更点】パス決定ロジック ---
         if is_latest:
-            # 最新版は 'mof2-blob-all' へ
+            # 最新版は 'mof2-blob-all' へ（フォルダ分けせず直下に配置）
             target_container = DEST_CONTAINER_LATEST
+            new_blob_path = original_id
         else:
-            # 旧版は 'mof2-blob-old' へ
+            # 旧版は 'mof2-blob-old' へ（カテゴリ/グループ/ファイル名 で整理）
             target_container = DEST_CONTAINER_OLD
+            new_blob_path = f"{category}/{group}/{original_id}"
         
-        # パス構成: カテゴリ/グループ/ファイル名
-        # (コンテナで新旧が分かれるため、パスに version_status は含めない)
-        new_blob_path = f"{category}/{group}/{original_id}"
+        # --------------------------------
 
         # クライアント取得
         source_blob = blob_service_client.get_blob_client(SOURCE_CONTAINER, original_id)
