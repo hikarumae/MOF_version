@@ -18,7 +18,7 @@ load_dotenv()
 # 設定
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 SOURCE_CONTAINER = "mof2-blob-new"
-CHECK_INTERVAL = 60  # 監視間隔（秒）
+CHECK_INTERVAL = 5  # 監視間隔（秒）
 
 def has_new_files():
     """
