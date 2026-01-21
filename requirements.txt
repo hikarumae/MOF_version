@@ -9,6 +9,7 @@ python-dotenv
 numpy
 azure-storage-blob
 azure-search-documents
+azure.functions
 pytesseract
 python-dateutil
 pdfminer.six
