@@ -1,6 +1,9 @@
 # OCRが動くようにOSレベルの設定が含まれたベースイメージ
 FROM python:3.9-slim
 
+# ログをバッファせず即時出力させる設定
+ENV PYTHONUNBUFFERED=1
+
 # OSのライブラリ（OCRやPDF変換に必要）をインストール
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \

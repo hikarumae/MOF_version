@@ -1,3 +1,6 @@
+# 最新版は「mof2-blob-all」に移動
+# バージョンが古いファイルは「mof2-blob-old」に移動
+
 import os
 import json
 from azure.storage.blob import BlobServiceClient, generate_blob_sas, BlobSasPermissions
@@ -10,8 +13,8 @@ load_dotenv()
 
 # === 設定 ===
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-SOURCE_CONTAINER = "mof2-blob-new"
-FINAL_JSON = "final_judgment.json"
+SOURCE_CONTAINER = "mof2-blob-new" # 参照するblobストレージコンテナ
+FINAL_JSON = "final_judgment.json" # 最新版判断結果の出力先
 
 DEST_CONTAINER_LATEST = "mof2-blob-all" # 最新版の移動先
 DEST_CONTAINER_OLD = "mof2-blob-old"    # 古いファイルの移動先
