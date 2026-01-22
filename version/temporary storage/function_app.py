@@ -1,8 +1,3 @@
-#リーダー選出（Coordinator）パターン
-#リーダーの選出: leader_lock ファイルに対してリース（独占権）を取得したプロセスがリーダーとなります。
-#全件一括処理: リーダーは mof2-blob-new コンテナ内のすべてのPDFファイルをリストアップして処理します。
-#安全な終了: 処理が終わったファイルは移動（削除）されるため、二重に処理されることはありません。
-
 import azure.functions as func
 import logging
 import os
@@ -10,7 +5,7 @@ import time
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 
-# ロジックをインポート
+# 既存のロジックをインポート
 import version_manager          # Step 1: OCR処理
 import version_manager_ai_azure # Step 2: AI判定
 import file_organizer_blob      # Step 3: ファイル移動
@@ -75,21 +70,31 @@ def mof_coordinator_trigger(myblob: func.InputStream):
                 
             logging.info(f"📋 現在の処理対象: {len(target_files)}件")
 
-            # リースを更新（処理が長引いてもロックを維持するため）
-            lease.renew()
+            # 全体ではなく、1サイクルごとに例外をキャッチする ###
+            try:
+                logging.info(f"📋 現在の処理対象: {len(target_files)}件")
+                lease.renew()
 
-            # --- 既存のパイプラインを実行 ---
-            # version_manager は内部で list_blobs() して全件ダウンロードする仕様
-            # そのため、このまま呼び出すだけで「今ある全件」を処理してくれます。
-            
-            logging.info("1️⃣ [Step 1] OCR処理を開始...")
-            version_manager.process_pdfs_from_blob()
-            
-            logging.info("2️⃣ [Step 2] AIによる判定を開始...")
-            version_manager_ai_azure.run_ai_judgment()
-            
-            logging.info("3️⃣ [Step 3] ファイルの仕分け移動を開始...")
-            file_organizer_blob.organize_blobs()
+                logging.info("1️⃣ [Step 1] OCR処理を開始...")
+                version_manager.process_pdfs_from_blob()
+                
+                logging.info("2️⃣ [Step 2] AIによる判定を開始...")
+                version_manager_ai_azure.run_ai_judgment()
+                
+                logging.info("3️⃣ [Step 3] ファイルの仕分け移動を開始...")
+                file_organizer_blob.organize_blobs()
+                
+            except Exception as single_error:
+                # ここでエラーが起きた場合、ファイルが 'new' に残っていると
+                # 次のループでまた同じファイルを処理して無限ループになります。
+                logging.error(f"⚠️ 処理サイクル中にエラーが発生しました: {single_error}")
+                
+                # ### エラーファイルを隔離する (重要) ###
+                # ここで target_files にあるファイルを 'error-folder' 等へ移動させる
+                # 処理を入れるか、手動で削除するまでループを抜ける等の対策が必要です。
+                # 今回は安全のため、一度エラーが出たらループを抜けるようにします。
+                logging.error("無限ループ防止のため、このサイクルの処理を中断します。手動でファイルを確認してください。")
+                break
 
             # 処理が1セット終わったら、もう一度 while の先頭に戻り、
             # 処理中に新しくアップロードされたファイルがないか確認します。
@@ -102,3 +107,6 @@ def mof_coordinator_trigger(myblob: func.InputStream):
         # 最後に必ずリーダー権限を返上する
         lease.release()
         logging.info("👋 リーダー権限を解放しました。")
+        
+        
+        ##　func startで起動＃
