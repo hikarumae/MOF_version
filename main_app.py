@@ -34,7 +34,7 @@ def main():
                 data = source_blob.download_blob().readall()
                 text_h, text_t, img = pdf_analyzer.extract_pdf_content(data)
                 info = ai_judge.get_judgment(text_h, text_t, img)
-                blob_organizer.organize_files(info, blob_props.name, source_blob)
+                blob_organizer.organize_files(info, blob_props.name, source_blob, data)
                 
                 logging.info(f"✅ 完了: {info.get('target_entity')} - {info.get('document_type')}")
 

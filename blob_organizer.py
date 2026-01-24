@@ -1,5 +1,6 @@
 #仕分け・DB担当モジュール
 
+
 import os
 import re
 import logging
@@ -16,7 +17,8 @@ def sanitize_key(key):
     sanitized = re.sub(r'[\\/#?\u0000-\u001f\u007f-\u009f]', '', key)
     return sanitized.strip() or "Unknown"
 
-def organize_files(info, original_blob_name, source_client):
+# ★修正ポイント1: 引数に「data（PDFの中身）」を追加
+def organize_files(info, original_blob_name, source_client, data):
     conn_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     blob_service = BlobServiceClient.from_connection_string(conn_str)
     table_client = TableClient.from_connection_string(conn_str, "LatestDocumentDB")
@@ -55,14 +57,17 @@ def organize_files(info, original_blob_name, source_client):
             
             old_blob_client = blob_service.get_blob_client("mof2-blob-all", old_version_filename)
             try:
-                blob_service.get_blob_client("mof2-blob-old", old_archive_path).start_copy_from_url(old_blob_client.url)
+                # ★修正ポイント2: 旧版の移動もURLコピーではなく、安全にダウンロード→アップロードに変更
+                old_data = old_blob_client.download_blob().readall()
+                blob_service.get_blob_client("mof2-blob-old", old_archive_path).upload_blob(old_data, overwrite=True)
                 old_blob_client.delete_blob()
             except Exception as e:
                 logging.warning(f"⚠️ 旧版の整理に失敗（無視して続行）: {e}")
 
         # 今回のファイルを all コンテナへ保存
         logging.info(f"🚀 最新版を all に保存中: {unique_name}")
-        blob_service.get_blob_client("mof2-blob-all", unique_name).start_copy_from_url(source_client.url)
+        # ★修正ポイント3: URLからのコピーではなく、引数のdataを直接アップロード
+        blob_service.get_blob_client("mof2-blob-all", unique_name).upload_blob(data, overwrite=True)
         
         # DBを更新
         try:
@@ -82,7 +87,8 @@ def organize_files(info, original_blob_name, source_client):
         # 【旧版判定】
         old_archive_path = f"{category}/{group}/{unique_name}"
         logging.info(f"📁 旧版として old に直接保存: {old_archive_path}")
-        blob_service.get_blob_client("mof2-blob-old", old_archive_path).start_copy_from_url(source_client.url)
+        # ★修正ポイント4: 同様にdataを直接アップロード
+        blob_service.get_blob_client("mof2-blob-old", old_archive_path).upload_blob(data, overwrite=True)
 
     # 4. 全ての処理が成功した時だけ、new コンテナから削除
     logging.info(f"🗑️ new コンテナから削除中: {original_blob_name}")
