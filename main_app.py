@@ -17,6 +17,11 @@ def main():
     while True:
         try:
             blobs = list(new_container.list_blobs())
+            # PDF以外も含めて、見つかった全てのファイル名をログに出す
+            all_names = [b.name for b in blobs]
+            if all_names:
+                logging.info(f"🔎 発見したファイル一覧: {all_names}")
+            
             if not blobs:
                 time.sleep(5)
                 continue
