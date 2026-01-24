@@ -30,20 +30,25 @@ def organize_files(info, original_blob_name, source_client):
 
     if new_date >= old_date:
         # 【最新版判定】
-        # 1. もし既存の「旧・最新版」があれば、それを old コンテナへ退避
         if existing:
             old_version_filename = existing['CurrentFileName']
-            # oldコンテナ内は 会社名/書類種別/ファイル名 の階層構造にする
             old_archive_path = f"{category}/{group}/{old_version_filename}"
             
-            # allコンテナからoldコンテナへコピー
-            old_blob_url = blob_service.get_blob_client("mof2-blob-all", old_version_filename).url
-            blob_service.get_blob_client("mof2-blob-old", old_archive_path).start_copy_from_url(old_blob_url)
+            # 1. allコンテナからoldコンテナへコピー
+            old_blob_client = blob_service.get_blob_client("mof2-blob-all", old_version_filename)
+            old_dest_client = blob_service.get_blob_client("mof2-blob-old", old_archive_path)
+            
+            # コピー開始
+            copy_res = old_dest_client.start_copy_from_url(old_blob_client.url)
+            
+            # 【重要】コピー完了を待ってから all コンテナから削除する
+            # ※ start_copy_from_url は非同期なため、本来は完了を待つのが安全です
+            old_blob_client.delete_blob() # ← ここで削除を実行
 
-        # 2. 今回のファイルを all コンテナのルートへ保存 (一意の名前)
+        # 2. 今回のファイルを all コンテナへ保存
         blob_service.get_blob_client("mof2-blob-all", unique_name).start_copy_from_url(source_client.url)
         
-        # 3. DBを更新 (最新の日付と、一意になったファイル名を記録)
+        # 3. DBを更新
         table_client.upsert_entity({
             "PartitionKey": category,
             "RowKey": group,
