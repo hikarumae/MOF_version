@@ -14,7 +14,7 @@ CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 def main():
     blob_service = BlobServiceClient.from_connection_string(CONNECTION_STRING)
     new_container = blob_service.get_container_client("mof2-blob-new")
-    logging.info("🚀 AI仕分けボット起動（高耐久モード）")
+    logging.info("🚀 AI仕分けボット起動")
 
     while True:
         try:
