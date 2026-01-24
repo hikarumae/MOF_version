@@ -2,7 +2,7 @@
 #ですので、このファイルに必要な道具を列挙しておきます
 
 # --- 外部ライブラリ (Azure App Service用) ---
-easyocr
+# easyocr
 pdf2image
 openai
 python-dotenv

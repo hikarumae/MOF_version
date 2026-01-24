@@ -4,9 +4,9 @@ import os
 import json
 import time
 import shutil
-import numpy as np
-import easyocr
-from pdf2image import convert_from_path
+#import numpy as np
+#import easyocr
+#from pdf2image import convert_from_path
 from pdfminer.high_level import extract_text
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
@@ -51,44 +51,21 @@ def download_blobs():
 
 def extract_text_hybrid(file_path, reader):
     """
-    ハイブリッド抽出ロジック:
-    1. pdfminer でテキストレイヤーの抽出を試みる (高速・高精度)
-    2. 抽出できた文字数が少なければ、画像化して EasyOCR をかける (低速・最終手段)
+    OCRを使わず、テキストレイヤーのみを抽出する制限モード
     """
     full_text = ""
-    method_used = ""
+    method_used = "TextLayer (pdfminer)"
 
-    # --- Step 1: テキストレイヤーからの抽出 (pdfminer) ---
     try:
         raw_text = extract_text(file_path)
-        # 空白除去して50文字以上あれば「読み取り成功」とみなす
-        if raw_text and len(raw_text.strip()) > 50:
+        if raw_text:
             full_text = raw_text
-            method_used = "TextLayer (pdfminer)"
     except Exception as e:
-        # pdfminerが失敗してもエラーログは出さずに静かに次へ
-        pass
-
-    # --- Step 2: 失敗時のみ OCR 実行 (EasyOCR) ---
-    if not full_text:
-        method_used = "OCR (EasyOCR)"
-        try:
-            images = convert_from_path(file_path)
-            ocr_text_parts = []
-            target_images = images 
-
-            for img in target_images:
-                img_array = np.array(img)
-                # detail=0 でテキストのみリストで返る
-                result = reader.readtext(img_array, detail=0) 
-                ocr_text_parts.append(" ".join(result))
-            
-            full_text = "\n".join(ocr_text_parts)
-        except Exception as e:
-            print(f"      ❌ OCRエラー: {e}")
-            full_text = ""
+        print(f"      ❌ テキスト抽出エラー: {e}")
+        full_text = ""
 
     return full_text, method_used
+    
 
 def process_pdfs_from_blob():
     """メイン処理: ダウンロード -> ハイブリッド抽出 -> JSON保存"""
@@ -99,9 +76,9 @@ def process_pdfs_from_blob():
         print("⚠️ 処理対象のPDFが見つかりませんでした。")
         return
 
-    # 2. EasyOCRの初期化
-    print("⚙️ OCRエンジン (EasyOCR) を初期化中...")
-    reader = easyocr.Reader(['ja', 'en']) 
+    # 2. OCR初期化をスキップ (Web App 標準環境用)
+    print("⚙️ OCRエンジンをスキップして続行します...")
+    reader = None  # 中身を空にする
 
     extracted_data = []
     print(f"🚀 {len(pdf_files)} 件のファイルの解析を開始します (ハイブリッドモード)...")
