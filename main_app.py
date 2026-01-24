@@ -1,4 +1,5 @@
 # main_app.py 
+import os
 import time
 import logging
 from azure.storage.blob import BlobServiceClient
