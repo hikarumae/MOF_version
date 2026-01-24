@@ -2,6 +2,14 @@
 import os
 import time
 import logging
+
+# ★ 一番最初にこれが出るか確認
+logging.basicConfig(level=logging.INFO)
+logging.info("====================================")
+logging.info("📢 プログラムの読み込みを開始しました！")
+logging.info("====================================")
+
+
 from azure.storage.blob import BlobServiceClient
 import pdf_analyzer
 import ai_judge
