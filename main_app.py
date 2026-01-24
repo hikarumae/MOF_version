@@ -1,3 +1,5 @@
+# 司令塔・ブロブトリガー代行)モジュール 
+
 import os
 import time
 import logging
@@ -12,41 +14,50 @@ CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 def main():
     blob_service = BlobServiceClient.from_connection_string(CONNECTION_STRING)
     new_container = blob_service.get_container_client("mof2-blob-new")
-    logging.info("🚀 AI仕分けボット起動（監視開始）")
+    logging.info("🚀 AI仕分けボット起動（高耐久モード）")
 
     while True:
-        # ファイルリストの取得でエラーが起きる可能性は低いため、tryの外に出すか個別にハンドリング
         try:
+            # 1. 処理対象のファイルをリストアップ
             blobs = list(new_container.list_blobs())
-        except Exception as e:
-            logging.error(f"❌ コンテナ読み込みエラー: {e}")
-            time.sleep(5)
-            continue
+            if not blobs:
+                # ファイルがない時は静かに待機
+                time.sleep(5)
+                continue
 
-        for blob_props in blobs:
-            if not blob_props.name.lower().endswith(".pdf"): continue
-            
-            # ★ try-except を個々のファイル処理の「内側」に移動
-            try:
-                logging.info(f"⚡ 処理開始: {blob_props.name}")
-                source_blob = new_container.get_blob_client(blob_props.name)
-                
-                data = source_blob.download_blob().readall()
-                text_h, text_t, img = pdf_analyzer.extract_pdf_content(data)
-                info = ai_judge.get_judgment(text_h, text_t, img)
-                blob_organizer.organize_files(info, blob_props.name, source_blob, data)
-                
-                logging.info(f"✅ 完了: {info.get('target_entity')} - {info.get('document_type')}")
+            logging.info(f"📂 {len(blobs)} 件のファイルを検知しました。順次処理を開始します。")
 
-            except Exception as e:
-                # ★ 個別のファイルでエラーが起きても、全体のループは止めない
-                logging.error(f"❌ {blob_props.name} の処理中にエラー: {e}")
+            for blob_props in blobs:
+                blob_name = blob_props.name
+                if not blob_name.lower().endswith(".pdf"):
+                    continue
                 
-                # 【重要】無限ループを防ぐため、エラーになったファイルは「new」から「error」コンテナ等へ移動させるか、
-                # 名前を変更して次回の対象外にする必要があります。
-                # 例: source_blobに ".error" を付与するなど。
+                # ★ 個別のファイル処理を try-except で囲む（重要！）
+                # これにより、1つのファイルでエラーが起きてもループが止まりません
+                try:
+                    logging.info(f"⚡ 処理開始: {blob_name}")
+                    source_blob = new_container.get_blob_client(blob_name)
+                    
+                    # データの読み込み
+                    data = source_blob.download_blob().readall()
+                    
+                    # 解析・判定・整理（前回修正した引数dataを渡す形）
+                    text_h, text_t, img = pdf_analyzer.extract_pdf_content(data)
+                    info = ai_judge.get_judgment(text_h, text_t, img)
+                    blob_organizer.organize_files(info, blob_name, source_blob, data)
+                    
+                    logging.info(f"✅ 完了: {blob_name} -> {info.get('target_entity')}")
+
+                except Exception as file_error:
+                    # 特定のファイルでエラーが起きた場合、ログを出して次のファイルへ
+                    logging.error(f"❌ ファイル「{blob_name}」の処理中にエラーが発生しました。スキップします: {file_error}")
+                    continue
+
+        except Exception as system_error:
+            # コンテナへの接続自体が失敗した場合などの致命的なエラー
+            logging.error(f"⚠️ システムエラー（監視を再開します）: {system_error}")
         
-        time.sleep(5) # 5秒間隔ポーリング
+        time.sleep(5) # 1サイクル終わったら5秒待機
 
 if __name__ == "__main__":
     main()
