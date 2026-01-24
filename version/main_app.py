@@ -4,7 +4,7 @@ import time
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import HttpResponseError, ResourceExistsError
 
-# あなたが作ったロジックをインポート
+# ロジックをインポート
 import version_manager
 import version_manager_ai_azure
 import file_organizer_blob

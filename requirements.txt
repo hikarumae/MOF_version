@@ -10,6 +10,7 @@ numpy
 azure-storage-blob
 azure-search-documents
 azure.functions
+azure-data-tables
 pytesseract
 python-dateutil
 pdfminer.six

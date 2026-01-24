@@ -1,3 +1,5 @@
+# バージョンを管理するためのPDFテキスト抽出ロジック
+
 import os
 import json
 import time
