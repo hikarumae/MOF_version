@@ -11,30 +11,31 @@ import blob_organizer
 logging.basicConfig(level=logging.INFO)
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 
-def watch_new_container():
+def main():
     blob_service = BlobServiceClient.from_connection_string(CONNECTION_STRING)
-    container_client = blob_service.get_container_client("mof2-blob-new")
-    logging.info("🚀 AI仕分けロボット起動完了（5秒間隔監視）")
+    new_container = blob_service.get_container_client("mof2-blob-new")
+    logging.info("🚀 AI仕分けボット起動（監視開始）")
 
     while True:
         try:
-            blobs = list(container_client.list_blobs())
+            blobs = list(new_container.list_blobs())
             for blob_props in blobs:
                 if not blob_props.name.lower().endswith(".pdf"): continue
                 
-                logging.info(f"⚡ 新着検知: {blob_props.name}")
-                source_blob = container_client.get_blob_client(blob_props.name)
+                logging.info(f"⚡ 処理開始: {blob_props.name}")
+                source_blob = new_container.get_blob_client(blob_props.name)
                 
-                # 処理フロー実行
+                # 抽出(冒頭/末尾/画像) -> AI判定 -> 仕分け
                 data = source_blob.download_blob().readall()
-                text, img = pdf_analyzer.extract_pdf_content(data)
-                info = ai_judge.get_judgment(text, img)
+                text_h, text_t, img = pdf_analyzer.extract_pdf_content(data)
+                info = ai_judge.get_judgment(text_h, text_t, img)
                 blob_organizer.organize_files(info, blob_props.name, source_blob)
-                logging.info(f"✅ 処理完了: {blob_props.name}")
+                
+                logging.info(f"✅ 完了: {info.get('target_entity')} - {info.get('document_type')}")
         except Exception as e:
-            logging.error(f"❌ エラー発生: {e}")
-            
-        time.sleep(5)
+            logging.error(f"❌ エラー: {e}")
+        
+        time.sleep(5) # 5秒間隔ポーリング
 
 if __name__ == "__main__":
-    watch_new_container()
+    main()
