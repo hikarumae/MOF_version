@@ -6,3 +6,4 @@ azure-data-tables
 openai
 pymupdf
 python-dotenv
+flask
