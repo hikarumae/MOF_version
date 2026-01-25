@@ -32,7 +32,7 @@ def get_judgment(text_head, text_tail, base64_image):
     以下のJSON形式で出力してください。
     {{
         "document_type": "契約書 / 就業規則 / 職務権限基準 / その他 のいずれか",
-        "target_entity": "会社名 または 自社",
+        "target_entity": "法的実体語句を除いた名前 または 自社",
         "identified_date": "YYYY-MM-DD"
     }}
 
