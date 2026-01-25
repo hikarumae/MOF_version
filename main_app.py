@@ -2,6 +2,11 @@
 import os
 import time
 import logging
+from azure.storage.blob import BlobServiceClient
+import pdf_analyzer
+import ai_judge
+import blob_organizer
+
 
 # ★ 一番最初にこれが出るか確認
 logging.basicConfig(level=logging.INFO)
@@ -9,11 +14,6 @@ logging.info("====================================")
 logging.info("📢 プログラムの読み込みを開始しました！")
 logging.info("====================================")
 
-
-from azure.storage.blob import BlobServiceClient
-import pdf_analyzer
-import ai_judge
-import blob_organizer
 
 logging.basicConfig(level=logging.INFO)
 CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
