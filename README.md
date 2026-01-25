@@ -12,6 +12,7 @@ Azure Storage にアップロードされた PDF を GPT-4o が解析し、自�
 - **AZURE_OPENAI_API_KEY** : OpenAIのAPIキー（※KEYではなくAPI_KEYに修正済み）
 
 <br>
+
 ### 2. ファイル構成の役割
 - `main_app.py` : Flaskサーバー兼、常時監視ループ。
 - `ai_judge.py` : 文書の判定ロジック。ここで「自社」ルールを管理。
