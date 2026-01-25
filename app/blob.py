@@ -2,12 +2,13 @@ import os
 from azure.storage.blob import BlobServiceClient
 from pypdf import PdfReader
 import io
+from typing import Optional
 
 blob_service = BlobServiceClient.from_connection_string(
     os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 )
 
-def load_pdfs_from_blob(container_name: str, prefix: str | None):
+def load_pdfs_from_blob(container_name: str, prefix:Optional[str]):
     container = blob_service.get_container_client(container_name)
     pages = []
 
