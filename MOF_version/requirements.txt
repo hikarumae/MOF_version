@@ -1,9 +1,0 @@
-#Azure上の App Service は、デプロイ時に requirements.txt というファイルを見て、必要な道具（easyocrやopenaiなど）を自動でインストールしてくれます。
-#ですので、このファイルに必要な道具を列挙しておきます
-
-azure-storage-blob
-azure-data-tables
-openai
-pymupdf
-python-dotenv
-flask
