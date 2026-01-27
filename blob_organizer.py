@@ -1,6 +1,3 @@
-#仕分け・DB担当モジュール
-
-
 import os
 import re
 import logging
@@ -17,13 +14,12 @@ def sanitize_key(key):
     sanitized = re.sub(r'[\\/#?\u0000-\u001f\u007f-\u009f]', '', key)
     return sanitized.strip() or "Unknown"
 
-# ★修正ポイント1: 引数に「data（PDFの中身）」を追加
 def organize_files(info, original_blob_name, source_client, data):
     conn_str = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
     blob_service = BlobServiceClient.from_connection_string(conn_str)
     table_client = TableClient.from_connection_string(conn_str, "LatestDocumentDB")
     
-    # 1. テーブルの自動作成（念のため）
+    # 1. テーブルの自動作成
     try:
         table_client.create_table()
     except:
@@ -34,8 +30,16 @@ def organize_files(info, original_blob_name, source_client, data):
     group = sanitize_key(info.get("target_entity", "不明"))
     new_date = info.get("identified_date", "1900-01-01")
 
+    # タイムスタンプ生成
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    unique_name = f"{timestamp}_{original_blob_name}"
+    
+    # ★追加: 元のファイル名から拡張子だけ取得 (.pdfなど)
+    _, ext = os.path.splitext(original_blob_name)
+    
+    # ★修正: 今回のファイル用のリネーム名を作成 (例: 2023-10-01_請求書_株式会社A_20240128_120000.pdf)
+    # ファイル名に使えない文字対策としてここでもsanitize_keyを通すか、単純な置換を行うのが安全です
+    safe_date = new_date.replace("/", "-") 
+    formatted_new_filename = f"{safe_date}_{category}_{group}_{timestamp}{ext}"
 
     logging.info(f"📊 DB照合中: PK={category}, RK={group}")
 
@@ -49,15 +53,24 @@ def organize_files(info, original_blob_name, source_client, data):
         logging.info("🆕 新規データとして処理します")
 
     if new_date >= old_date:
-        # 【最新版判定】
+        # 【最新版判定】 -> 既存のファイルを old に退避する必要がある
         if existing:
             old_version_filename = existing['CurrentFileName']
-            old_archive_path = f"{category}/{group}/{old_version_filename}"
-            logging.info(f"📦 旧版を退避中: {old_archive_path}")
+            
+            # ★修正: 退避するファイルの情報をDBから取得して、綺麗な名前にリネームする
+            # 退避ファイルの元の日付を使用
+            archive_date = existing.get("LatestDate", "1900-01-01").replace("/", "-")
+            # 拡張子の取得（DB上のファイル名から）
+            _, old_ext = os.path.splitext(old_version_filename)
+            
+            # 退避用ファイル名: 日付_区分_対象_退避日時.pdf
+            formatted_archive_name = f"{archive_date}_{category}_{group}_{timestamp}_old{old_ext}"
+            old_archive_path = f"{category}/{group}/{formatted_archive_name}"
+            
+            logging.info(f"📦 旧版をリネームして退避中: {old_archive_path}")
             
             old_blob_client = blob_service.get_blob_client("mof2-blob-all", old_version_filename)
             try:
-                # ★修正ポイント2: 旧版の移動もURLコピーではなく、安全にダウンロード→アップロードに変更
                 old_data = old_blob_client.download_blob().readall()
                 blob_service.get_blob_client("mof2-blob-old", old_archive_path).upload_blob(old_data, overwrite=True)
                 old_blob_client.delete_blob()
@@ -65,9 +78,9 @@ def organize_files(info, original_blob_name, source_client, data):
                 logging.warning(f"⚠️ 旧版の整理に失敗（無視して続行）: {e}")
 
         # 今回のファイルを all コンテナへ保存
-        logging.info(f"🚀 最新版を all に保存中: {unique_name}")
-        # ★修正ポイント3: URLからのコピーではなく、引数のdataを直接アップロード
-        blob_service.get_blob_client("mof2-blob-all", unique_name).upload_blob(data, overwrite=True)
+        # (ここも formatted_new_filename を使うと、allフォルダの中身も綺麗になります)
+        logging.info(f"🚀 最新版を all に保存中: {formatted_new_filename}")
+        blob_service.get_blob_client("mof2-blob-all", formatted_new_filename).upload_blob(data, overwrite=True)
         
         # DBを更新
         try:
@@ -76,18 +89,19 @@ def organize_files(info, original_blob_name, source_client, data):
                 "PartitionKey": category,
                 "RowKey": group,
                 "LatestDate": new_date,
-                "CurrentFileName": unique_name
+                "CurrentFileName": formatted_new_filename # DBにも綺麗な名前を登録
             })
             logging.info("✅ テーブル更新成功")
         except Exception as e:
             logging.error(f"❌ テーブル更新失敗: {e}")
-            raise  # ここで失敗したら削除させない
+            raise
         
     else:
-        # 【旧版判定】
-        old_archive_path = f"{category}/{group}/{unique_name}"
-        logging.info(f"📁 旧版として old に直接保存: {old_archive_path}")
-        # ★修正ポイント4: 同様にdataを直接アップロード
+        # 【旧版判定】 -> 今回のファイルを直接 old に保存
+        # ★修正: ここで formatted_new_filename を使用してリネーム保存
+        old_archive_path = f"{category}/{group}/{formatted_new_filename}"
+        logging.info(f"📁 旧版として old にリネーム保存: {old_archive_path}")
+        
         blob_service.get_blob_client("mof2-blob-old", old_archive_path).upload_blob(data, overwrite=True)
 
     # 4. 全ての処理が成功した時だけ、new コンテナから削除
