@@ -36,7 +36,10 @@ def organize_files(info, original_blob_name, source_client, data):
     
     # 1. 最新版フォルダ(all)用の名前：
     #    リネームせず、元のファイル名（重複防止のタイムスタンプ付与のみ）を使用
-    unique_name = f"{timestamp}_{original_blob_name}"
+    #unique_name = f"{timestamp}_{original_blob_name}"
+    
+    #デモ用に元のファイル名を使用
+    unique_name = f"{original_blob_name}"
     
     # 2. 旧版フォルダ(old)へ直接保存する時用の名前：
     #    「日付_区分_対象...」の形式にリネーム
