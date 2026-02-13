@@ -8,3 +8,4 @@ python-dotenv
 h11>=0.16.0 # not directly required, pinned by Snyk to avoid a vulnerability
 starlette>=0.40.0 # not directly required, pinned by Snyk to avoid a vulnerability
 cryptography>=46.0.5 # not directly required, pinned by Snyk to avoid a vulnerability
+azure-core>=1.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
