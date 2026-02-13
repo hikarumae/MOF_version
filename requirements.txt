@@ -7,8 +7,11 @@ openai
 pymupdf
 python-dotenv
 flask
-h11>=0.16.0 # not directly required, pinned by Snyk to avoid a vulnerability
 
+fastapi>=0.115.0
+starlette>=0.40.0
+h11>=0.16.0
+urllib3>=2.2.2
+cryptography>=46.0.0
 jiter
 typing-extensions>=4.11
-azure-core>=1.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
