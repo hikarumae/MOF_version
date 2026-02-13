@@ -11,9 +11,11 @@ azure-search-documents
 openai>=1.53.1
 jiter
 typing-extensions>=4.11
-pypdf>=5.0.0
+pypdf>=6.6.2
 python-dotenv
 h11>=0.16.0
-urllib3>=2.2.2
+urllib3>=2.6.3
 cryptography>=46.0.5
 zipp>=3.19.1
+azure-core>=1.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
+requests>=2.32.4 # not directly required, pinned by Snyk to avoid a vulnerability
