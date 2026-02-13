@@ -9,9 +9,14 @@ python-dotenv
 flask
 
 fastapi>=0.115.0
-starlette>=0.40.0
-h11>=0.16.0
-urllib3>=2.2.2
-cryptography>=46.0.0
+uvicorn[standard]
+azure-storage-blob
+azure-search-documents
+openai>=1.53.1
 jiter
 typing-extensions>=4.11
+pypdf>=5.0.0
+python-dotenv
+h11>=0.16.0
+urllib3>=2.2.2
+cryptography>=46.0.5
