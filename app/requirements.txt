@@ -1,11 +1,4 @@
 
-uvicorn[standard]
-azure-storage-blob
-azure-search-documents
-openai
-pypdf
-python-dotenv
-
 fastapi>=0.115.0
 uvicorn[standard]
 azure-storage-blob
@@ -18,3 +11,4 @@ python-dotenv
 h11>=0.16.0
 urllib3>=2.2.2
 cryptography>=46.0.5
+zipp>=3.19.1
