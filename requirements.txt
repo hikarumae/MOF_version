@@ -11,3 +11,4 @@ h11>=0.16.0 # not directly required, pinned by Snyk to avoid a vulnerability
 
 jiter
 typing-extensions>=4.11
+azure-core>=1.38.0 # not directly required, pinned by Snyk to avoid a vulnerability
