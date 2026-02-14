@@ -16,12 +16,12 @@ python-dotenv
 # これらは本来書かなくても動きますが、Snykのエラーを消すために明記
 
 werkzeug>=3.0.3     # Error: 2.2.3 (Flaskの裏側) -> Fix: 3.0系へ
-anyio>=4.4.0        # Error: 3.7.1 (FastAPI/OpenAIの裏側) -> Fix: 4.4系へ
+anyio==4.4.0        # Error: 3.7.0 -> Fix: 4.4.0 (FastAPIの依存関係で、最新の安定版を指定)
 requests>=2.32.0    # Error: 2.31.0 -> Fix: 2.32系へ
 azure-core>=1.31.0  # Error: 1.30.1 -> Fix: 1.31系へ
 
 # --- 既に記述があったが、念のため最新を維持するもの ---
-h11>=0.16.0         # Error: 0.14.0 -> File: 0.16.0 (このままでOK)
+h11==0.16.0      # FastAPIの依存関係で、最新の安定版を指定
 urllib3>=2.2.3      # Error: 2.0.7 -> File: 2.2.2 (念のため2.2.3へ)
 cryptography>=46.0.5
-zipp>=3.20.0        # Error: 3.15.0 -> File: 3.19.1 (念のため3.20系へ)
+zipp==3.19.1        # 依存関係の一部で、最新の安定版を指定
