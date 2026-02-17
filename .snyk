@@ -1,5 +1,0 @@
-version: v1.25.0
-
-# Snyk に Python バージョンを強制的に伝える設定
-language-settings:
-python: "3.11"
